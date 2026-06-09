@@ -1,27 +1,3 @@
-"""
-src/features.py
-────────────────────────────────────────────────────────────────────────────
-Reusable feature-engineering functions for the Airline Loyalty project.
-
-These functions mirror the logic in 04_feature_engineering.ipynb but are
-importable by both notebooks and the Streamlit dashboard so that features
-are computed identically everywhere — no duplication, no drift.
-
-Usage
------
-from src.features import (
-    enforce_leakage_boundary,
-    build_raw_activity_features,
-    build_hyperbolic_features,
-    build_loss_aversion_features,
-    build_status_quo_features,
-    build_consistency_features,
-    build_fixed_effects_features,
-    build_seasonal_features,
-    build_all_features,
-    FEATURE_COLS,
-)
-"""
 
 import pandas as pd
 import numpy as np
