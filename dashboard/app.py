@@ -420,7 +420,7 @@ if page == "Member Lookup":
                 color="direction",
                 color_discrete_map={
                     "Increases churn risk": "#E45756",
-                    "Reduces churn risk": "#4C9BE8",
+                    "Reduces churn risk": "#0056AD",
                 },
                 labels={
                     "shap_value": "Impact on churn risk",
