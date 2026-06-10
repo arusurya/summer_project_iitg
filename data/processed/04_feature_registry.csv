@@ -1,0 +1,44 @@
+feature,family,description
+months_with_flights,raw_activity,Historical months_with_flights
+tenure_months,raw_activity,Historical tenure_months
+activity_rate,raw_activity,Historical activity_rate
+total_flights_sum,raw_activity,Aggregate: total_flights_sum
+total_flights_mean,raw_activity,Aggregate: total_flights_mean
+total_flights_max,raw_activity,Aggregate: total_flights_max
+total_flights_std,raw_activity,Aggregate: total_flights_std
+points_accumulated_sum,raw_activity,Aggregate: points_accumulated_sum
+points_accumulated_mean,raw_activity,Aggregate: points_accumulated_mean
+points_redeemed_sum,raw_activity,Aggregate: points_redeemed_sum
+points_redeemed_mean,raw_activity,Aggregate: points_redeemed_mean
+distance_sum,raw_activity,Aggregate: distance_sum
+distance_mean,raw_activity,Aggregate: distance_mean
+hyperbolic_flight_score,behavioural_hyperbolic,Recency-weighted score — recent months weighted higher (hyperbolic discounting)
+hyperbolic_distance_score,behavioural_hyperbolic,Recency-weighted score — recent months weighted higher (hyperbolic discounting)
+flights_last_3m,behavioural_recency,Total flights in last 3 months
+flights_last_6m,behavioural_recency,Total flights in last 6 months
+flights_last_12m,behavioural_recency,Total flights in last 12 months
+recency_ratio,behavioural_recency,flights_last_3m / flights_last_12m — value < 0.25 signals declining trajectory
+total_pts_accumulated,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+total_pts_redeemed,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+net_unredeemed_points,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+redemption_ratio,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+recent_redemption_ratio,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+redemption_trend,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+loss_aversion_score,behavioural_loss_aversion,Points hoarding / redemption (loss aversion signal)
+tier_rank,behavioural_status_quo,Tier rank and flight trajectory (status quo bias)
+flight_trajectory,behavioural_status_quo,Tier rank and flight trajectory (status quo bias)
+flights_first_6m_avg,behavioural_status_quo,Tier rank and flight trajectory (status quo bias)
+flights_last_6m_avg,behavioural_status_quo,Tier rank and flight trajectory (status quo bias)
+flight_cv,behavioural_consistency,Flight regularity and streak
+longest_active_streak,behavioural_consistency,Flight regularity and streak
+months_since_last_flight,behavioural_consistency,Flight regularity and streak
+mean_fe_deviation,econometric_fixed_effects,Deviation from tier-year cohort average (fixed effects)
+std_fe_deviation,econometric_fixed_effects,Deviation from tier-year cohort average (fixed effects)
+seasonal_volatility,econometric_seasonal,Avg deviation from personal seasonal baseline
+last_flight_quarter,econometric_seasonal,Quarter in which member last flew
+province,demographic,Label-encoded: province
+marital_status,demographic,Label-encoded: marital_status
+education,demographic,Label-encoded: education
+gender,demographic,Label-encoded: gender
+clv,demographic,Customer Lifetime Value (existing metric)
+clv_percentile,demographic,CLV as percentile rank (0-1)
