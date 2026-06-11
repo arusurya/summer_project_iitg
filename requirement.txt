@@ -7,3 +7,4 @@ jupyter
 ipykernel
 xgboost
 shap
+streamlit
