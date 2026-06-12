@@ -921,7 +921,7 @@ elif page == "Cohort Trends":
 
         styled = yoy_display.style.format(fmt_yoy)
         if "YoY change (last 2 yrs)" in yoy_display.columns:
-            styled = styled.applymap(_color_yoy, subset=["YoY change (last 2 yrs)"])
+            styled = styled.map(_color_yoy, subset=["YoY change (last 2 yrs)"])
         st.dataframe(styled, use_container_width=True)
 
 
