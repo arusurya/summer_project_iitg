@@ -288,23 +288,10 @@ with st.sidebar:
     st.markdown("---")
     page = st.radio(
         "Navigate",
-        ["Member Lookup", "Segment Map",
+        ["Overview", "Member Lookup", "Segment Map",
          "Cohort Trends", "Nudge Engine"],
         label_visibility="collapsed",
     )
-    st.markdown("---")
-
-    # Model summary in sidebar
-    try:
-        summary = get_model_summary(MODEL)
-        st.markdown("**Model performance**")
-        st.markdown(f"XGBoost CV AUC &nbsp; `{summary['xgb_auc_pct']}`")
-        st.markdown(f"Decision threshold &nbsp; `{summary['threshold_pct']}`")
-        st.markdown(f"Overall churn rate &nbsp; `{summary['churn_rate_pct']}`")
-        st.markdown(f"Members analysed &nbsp; `{summary['n_members']:,}`")
-    except Exception:
-        st.info("Run notebooks 01–07 to populate model stats.")
-
     st.markdown("---")
     st.caption("Behavioural Airline Loyalty Intelligence")
 
@@ -325,16 +312,121 @@ except Exception as e:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# PAGE 0 — Overview
+# ══════════════════════════════════════════════════════════════════════════
+
+if page == "Overview":
+
+    st.title("Loyalty Intelligence")
+    st.caption("Your at-a-glance view of member churn risk and recommended actions.")
+    st.markdown("---")
+
+    # ── Headline KPIs ─────────────────────────────────────────────────────
+    critical_n   = (segments["risk_bucket"] == "Critical (>75%)").sum()
+    high_n       = (segments["risk_bucket"] == "High (50-75%)").sum()
+    total_bclv   = segments["behavioral_clv"].sum() if "behavioral_clv" in segments.columns else 0
+    critical_clv = segments.loc[
+        segments["risk_bucket"] == "Critical (>75%)", "behavioral_clv"
+    ].sum() if "behavioral_clv" in segments.columns else 0
+    pct_critical = critical_n / len(segments) if len(segments) > 0 else 0
+
+    top_nudge_overall = (
+        playbook["nudge_type"].value_counts().index[0]
+        if "nudge_type" in playbook.columns and not playbook.empty else "—"
+    )
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Members needing attention",
+              f"{critical_n + high_n:,}",
+              help="Critical (>75%) + High (50–75%) churn risk")
+    k2.metric("CLV at critical risk",
+              f"${critical_clv:,.0f}",
+              help="Behavioral CLV of Critical-risk members")
+    k3.metric("% members critical",
+              f"{pct_critical:.1%}")
+    k4.metric("Top recommended action", top_nudge_overall)
+
+    st.markdown("---")
+
+    # ── Top 10 highest-priority members ──────────────────────────────────
+    st.markdown('<p class="section-title">Top 10 members to act on now</p>',
+                unsafe_allow_html=True)
+
+    priority_cols = [c for c in [
+        "loyalty_number", "cluster_label", "risk_bucket",
+        "churn_prob", "behavioral_clv", "nudge_type", "subject_line",
+    ] if c in playbook.columns]
+
+    top10 = (
+        playbook[playbook["risk_bucket"].isin(["Critical (>75%)", "High (50-75%)"])]
+        .sort_values("behavioral_clv", ascending=False)
+        .head(10)[priority_cols]
+    )
+
+    fmt10: dict = {}
+    if "churn_prob"     in top10.columns: fmt10["churn_prob"]     = "{:.1%}"
+    if "behavioral_clv" in top10.columns: fmt10["behavioral_clv"] = "${:,.0f}"
+
+    st.dataframe(
+        top10.style.format(fmt10),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption("Click **Member Lookup** in the sidebar to investigate any member in detail.")
+
+    st.markdown("---")
+
+    # ── Risk distribution bar ─────────────────────────────────────────────
+    st.markdown('<p class="section-title">Risk distribution across all members</p>',
+                unsafe_allow_html=True)
+
+    risk_counts = (
+        segments["risk_bucket"]
+        .value_counts()
+        .reindex(RISK_BUCKET_ORDER, fill_value=0)
+        .reset_index()
+    )
+    risk_counts.columns = ["Risk bucket", "Members"]
+    risk_colors_list = [RISK_COLORS.get(r, "#9AA4B2") for r in risk_counts["Risk bucket"]]
+
+    fig_risk = px.bar(
+        risk_counts,
+        x="Risk bucket",
+        y="Members",
+        color="Risk bucket",
+        color_discrete_sequence=risk_colors_list,
+        text="Members",
+    )
+    fig_risk.update_traces(textposition="outside")
+    fig_risk = style_plotly(fig_risk, height=340)
+    fig_risk.update_layout(showlegend=False)
+    st.plotly_chart(fig_risk, use_container_width=True, config=PLOT_CONFIG)
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # PAGE 1 — Member Lookup
 # ══════════════════════════════════════════════════════════════════════════
 
-if page == "Member Lookup":
+elif page == "Member Lookup":
 
     st.title("Member Lookup")
     st.caption(
         "Enter a loyalty number to see churn risk, behavioural signals, "
         "SHAP explanation, and the recommended retention action."
     )
+
+    # Model stats tucked away for technical users
+    try:
+        summary = get_model_summary(MODEL)
+        with st.expander("ℹ️ About the model", expanded=False):
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc1.metric("XGBoost CV AUC",    summary["xgb_auc_pct"])
+            mc2.metric("Decision threshold", summary["threshold_pct"])
+            mc3.metric("Overall churn rate", summary["churn_rate_pct"])
+            mc4.metric("Members analysed",  f"{summary['n_members']:,}")
+    except Exception:
+        pass
 
     col_input, col_hint = st.columns([2, 3])
     with col_input:
@@ -382,7 +474,7 @@ if page == "Member Lookup":
         st.stop()
 
     # ── Top KPI row ───────────────────────────────────────────────────────
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1.6, 1.6])
     c1.metric("Churn probability",  f"{result['churn_pct']}%")
     c2.metric("CLV",                f"${result['clv']:,.0f}")
     c3.metric("Behavioral CLV",     f"${result['behavioral_clv']:,.0f}")
@@ -404,6 +496,48 @@ if page == "Member Lookup":
 
         if not result["shap_waterfall"].empty:
             wf = result["shap_waterfall"].copy()
+
+            # Human-readable feature name mapping
+            FEATURE_LABELS = {
+                "months_since_last_flight" : "Months since last flight",
+                "recency_ratio"            : "Recent vs. past booking ratio",
+                "flights_last_3m"          : "Flights in last 3 months",
+                "flights_last_6m"          : "Flights in last 6 months",
+                "hyperbolic_flight_score"  : "Booking momentum score",
+                "flights_last_6m_avg"      : "Avg flights per month (6m)",
+                "clv"                      : "Customer lifetime value",
+                "points_accumulated_sum"   : "Total points earned",
+                "points_redeemed_sum"      : "Total points redeemed",
+                "flight_trajectory"        : "Flight frequency trend",
+                "loss_aversion_score"      : "Points expiry sensitivity",
+                "points_accumulated_mean"  : "Avg points per trip",
+                "redemption_ratio"         : "Points redemption rate",
+                "seasonal_volatility"      : "Seasonal travel consistency",
+                "tenure_months"            : "Membership tenure (months)",
+                "distance"                 : "Avg trip distance",
+                "total_flights"            : "Total flights taken",
+            }
+
+            def _rename_label(lbl):
+                # Split "feature_name = value" format
+                parts = str(lbl).split("=", 1)
+                raw_name = parts[0].strip()
+                suffix   = (" = " + parts[1].strip()) if len(parts) > 1 else ""
+                friendly = FEATURE_LABELS.get(raw_name, raw_name.replace("_", " ").title())
+                return friendly + suffix
+
+            wf["label"] = wf["label"].apply(_rename_label)
+
+            # Format scientific notation in values
+            import re
+            def _fmt_label(lbl):
+                def _repl(m):
+                    try:
+                        return f"= {float(m.group(1)):,.0f}"
+                    except Exception:
+                        return m.group(0)
+                return re.sub(r"=\s*([-\d.]+e[+\-]\d+)", _repl, str(lbl))
+            wf["label"] = wf["label"].apply(_fmt_label)
             wf_plot = wf.copy()
             wf_plot["direction"] = np.where(
                 wf_plot["shap_value"] >= 0,
@@ -487,33 +621,52 @@ if page == "Member Lookup":
 
     sig_cols = [
         ("months_since_last_flight", "Months since last flight", "{:.0f}"),
-        ("recency_ratio",            "Recency ratio (3m/12m)",   "{:.3f}"),
-        ("loss_aversion_score",      "Loss aversion score",      "{:.3f}"),
-        ("redemption_ratio",         "Redemption ratio",         "{:.3f}"),
-        ("flight_trajectory",        "Flight trajectory",        "{:.2f}"),
-        ("hyperbolic_flight_score",  "Hyperbolic flight score",  "{:.1f}"),
-        ("seasonal_volatility",      "Seasonal volatility",      "{:.3f}"),
-        ("tenure_months",            "Tenure (months)",          "{:.0f}"),
+        ("recency_ratio",            "Recent vs. past booking ratio", "{:.3f}"),
+        ("loss_aversion_score",      "Points expiry sensitivity",  "{:.3f}"),
+        ("redemption_ratio",         "Points redemption rate",     "{:.3f}"),
+        ("flight_trajectory",        "Flight frequency trend",     "{:.2f}"),
+        ("hyperbolic_flight_score",  "Booking momentum score",     "{:.1f}"),
+        ("seasonal_volatility",      "Seasonal consistency",       "{:.3f}"),
+        ("tenure_months",            "Membership tenure (months)", "{:.0f}"),
     ]
 
     member_row = features[features["loyalty_number"] == member_id]
+
+    # Compute segment averages for benchmark deltas
+    member_segment = result.get("segment", None)
+    seg_features = features.merge(
+        segments[["loyalty_number", "cluster_label"]], on="loyalty_number", how="left"
+    )
+    if member_segment:
+        seg_avg = seg_features[seg_features["cluster_label"] == member_segment]
+    else:
+        seg_avg = seg_features
+
     if not member_row.empty:
         sig_values = {}
         for col, label, fmt in sig_cols:
             if col in member_row.columns:
-                val = member_row[col].values[0]
-                sig_values[label] = fmt.format(val)
+                val  = member_row[col].values[0]
+                avg  = seg_avg[col].mean() if col in seg_avg.columns else None
+                delta_str = None
+                if avg is not None and not np.isnan(avg):
+                    diff = val - avg
+                    delta_str = fmt.format(diff)
+                sig_values[label] = (fmt.format(val), delta_str)
 
         if sig_values:
-            sig_df = pd.DataFrame(
-                list(sig_values.items()), columns=["Signal", "Value"]
-            )
+            items     = list(sig_values.items())
             n_per_row = 4
-            rows = [sig_df.iloc[i:i+n_per_row] for i in range(0, len(sig_df), n_per_row)]
-            for row_df in rows:
-                row_cols = st.columns(len(row_df))
-                for col_obj, (_, sig_row) in zip(row_cols, row_df.iterrows()):
-                    col_obj.metric(sig_row["Signal"], sig_row["Value"])
+            rows = [items[i:i+n_per_row] for i in range(0, len(items), n_per_row)]
+            for row_items in rows:
+                row_cols = st.columns(len(row_items))
+                for col_obj, (label, (val, delta)) in zip(row_cols, row_items):
+                    col_obj.metric(
+                        label, val,
+                        delta=delta,
+                        delta_color="off",
+                        help=f"Δ vs segment avg: {delta}" if delta else None,
+                    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -528,47 +681,51 @@ elif page == "Segment Map":
     seg_summary = build_segment_summary(segments)
 
     # ── Top metrics ───────────────────────────────────────────────────────
+    critical_n = (segments["risk_bucket"] == "Critical (>75%)").sum()
+    total_bclv = segments["behavioral_clv"].sum() if "behavioral_clv" in segments.columns else 0
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total members",    f"{len(segments):,}")
-    c2.metric("Segments",         f"{segments['cluster_label'].nunique()}")
-    critical_n = (segments["risk_bucket"] == "Critical (>75%)").sum()
-    c3.metric("Critical risk",    f"{critical_n:,}")
-    total_bclv = segments["behavioral_clv"].sum() if "behavioral_clv" in segments.columns else 0
+    pct_crit = critical_n / len(segments) if len(segments) > 0 else 0
+    c2.metric("% at critical risk", f"{pct_crit:.1%}")
+    c3.metric("Critical risk members", f"{critical_n:,}")
     c4.metric("Total behavioral CLV", f"${total_bclv:,.0f}")
 
     st.markdown("---")
 
-    col_chart, col_table = st.columns([2, 1])
+    # ── Full-width scatter plot ────────────────────────────────────────────
+    st.markdown('<p class="section-title">Churn risk vs Behavioral CLV</p>',
+                unsafe_allow_html=True)
 
-    with col_chart:
-        st.markdown('<p class="section-title">Churn risk vs Behavioral CLV</p>',
-                    unsafe_allow_html=True)
+    plot_df = segments.copy()
+    plot_df["churn_pct"] = plot_df["churn_prob"] * 100
+    fig = px.scatter(
+        plot_df,
+        x="churn_pct",
+        y="behavioral_clv",
+        color="cluster_label",
+        hover_data=["loyalty_number", "risk_bucket", "clv", "behavioral_clv"],
+        labels={
+            "churn_pct": "Churn probability (%)",
+            "behavioral_clv": "Behavioral CLV ($)",
+            "cluster_label": "Segment",
+        },
+        title="Churn risk vs Behavioral CLV",
+    )
 
-        plot_df = segments.copy()
-        plot_df["churn_pct"] = plot_df["churn_prob"] * 100
-        fig = px.scatter(
-            plot_df,
-            x="churn_pct",
-            y="behavioral_clv",
-            color="cluster_label",
-            hover_data=["loyalty_number", "risk_bucket", "clv", "behavioral_clv"],
-            labels={
-                "churn_pct": "Churn probability (%)",
-                "behavioral_clv": "Behavioral CLV ($)",
-                "cluster_label": "Segment",
-            },
-            title="Churn risk vs Behavioral CLV",
-        ) 
+    fig.add_vline(x=50, line_dash="dash", line_color="#9AA4B2")
 
-        fig.add_vline(x=50, line_dash="dash", line_color="#9AA4B2")
+    fig.update_layout(
+       template=PLOTLY_TEMPLATE,
+       height=480,
+       margin=dict(l=10, r=10, t=60, b=10),
+   )
 
-        fig.update_layout(
-           template=PLOTLY_TEMPLATE,
-           height=520,
-           margin=dict(l=10, r=10, t=60, b=10),
-       )
+    st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
 
-        st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
+    st.markdown("---")
+
+    # ── Segment summary + CLV gap side by side ────────────────────────────
+    col_table, col_clv = st.columns([1, 1])
 
     with col_table:
         st.markdown('<p class="section-title">Segment summary</p>',
@@ -590,10 +747,11 @@ elif page == "Segment Map":
             use_container_width=True, height=300,
         )
 
+    with col_clv:
         # CLV gap chart
         if "avg_clv" in seg_summary.columns and "avg_behavioral_clv" in seg_summary.columns:
             st.markdown(
-                '<p class="section-title" style="margin-top:16px">CLV gap by segment</p>',
+                '<p class="section-title">CLV gap by segment</p>',
                 unsafe_allow_html=True
             )
 
@@ -622,13 +780,11 @@ elif page == "Segment Map":
 
             fig2.update_layout(
                 template=PLOTLY_TEMPLATE,
-                height=360,
+                height=300,
                 margin=dict(l=10, r=10, t=60, b=10),
             )
 
             st.plotly_chart(fig2, use_container_width=True)
-
-            
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -707,7 +863,16 @@ elif page == "Cohort Trends":
         x=pd.Timestamp("2018-06-01"),
         line_dash="dash",
         line_color="#9AA4B2",
-    ) 
+    )
+    fig.add_annotation(
+        x=pd.Timestamp("2018-06-01"),
+        y=1, yref="paper",
+        text="Data ends Jun 2018",
+        showarrow=False,
+        xanchor="left",
+        font=dict(color="#9AA4B2", size=11),
+        xshift=6,
+    )
 
     fig.update_layout(
         template=PLOTLY_TEMPLATE,
@@ -716,6 +881,10 @@ elif page == "Cohort Trends":
     )
 
     st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
+    st.caption(
+        "⚠️ Note: the spike near May–Jun 2018 reflects partial-month data aggregation "
+        "at the end of the observation window, not a real surge in travel."
+    )
 
     # ── Year-over-year comparison ─────────────────────────────────────────
     st.markdown("---")
@@ -739,14 +908,21 @@ elif page == "Cohort Trends":
             yoy_pivot.index.isin(selected_segs)
         ].round(2)
 
-        fmt_yoy = {c: "{:.2f}" for c in yoy_display.columns}
-        fmt_yoy["YoY change (last 2 yrs)"] = "{:.1%}"
-        st.dataframe(
-            yoy_display.style.format(fmt_yoy)
-            .background_gradient(subset=["YoY change (last 2 yrs)"],
-                                  cmap="RdYlGn"),
-            use_container_width=True,
-        )
+        # Replace None/NaN with N/A for readability
+        yoy_display = yoy_display.fillna("N/A")
+        fmt_yoy = {c: "{:.2f}" for c in yoy_display.select_dtypes("number").columns}
+        if "YoY change (last 2 yrs)" in yoy_display.select_dtypes("number").columns:
+            fmt_yoy["YoY change (last 2 yrs)"] = "{:.1%}"
+
+        def _color_yoy(val):
+            if not isinstance(val, (int, float)):
+                return "color: #9AA4B2"
+            return "color: #4CAF7D" if val >= 0 else "color: #E45756"
+
+        styled = yoy_display.style.format(fmt_yoy)
+        if "YoY change (last 2 yrs)" in yoy_display.columns:
+            styled = styled.applymap(_color_yoy, subset=["YoY change (last 2 yrs)"])
+        st.dataframe(styled, use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -811,7 +987,7 @@ elif page == "Nudge Engine":
     if "nudge_type" in plist.columns:
         if "nudge_type" in plist.columns and not plist.empty:
             top_nudge = plist["nudge_type"].value_counts().index[0]
-            m4.metric("Top nudge type", top_nudge[:22] + ("..." if len(top_nudge) > 22 else ""))
+            m4.metric("Top nudge", top_nudge)
         else:
             m4.metric("Top nudge type", "—")
 
@@ -875,14 +1051,6 @@ elif page == "Nudge Engine":
                 labels={"members": "Members", "nudge_type": ""},
                 title="Nudge type distribution",
             )
-            fig.update_layout(
-                template=PLOTLY_TEMPLATE,
-                showlegend=False,
-                height=360,
-                margin=dict(l=10, r=10, t=60, b=10),
-            )
-            st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
-            
             fig.update_traces(marker_color="#4C9BE8")
             fig = style_plotly(fig, height=330)
             st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
